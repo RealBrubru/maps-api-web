@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maps API — mapa vivo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, system-ui, sans-serif; }
+  #bar { padding: 8px; background: #1a1a2e; color: #fff; display: flex;
+         flex-wrap: wrap; gap: 6px; align-items: center; }
+  #bar input[type=text] { flex: 1; min-width: 130px; padding: 7px 10px;
+         border-radius: 8px; border: none; font-size: 14px; }
+  #bar select, #bar button { padding: 7px 8px; border-radius: 8px;
+         border: none; font-size: 13px; }
+  #bar label { font-size: 12px; display: flex; align-items: center; gap: 3px;
+         white-space: nowrap; }
+  #bar button { background: #e94560; color: #fff; font-weight: 600;
+         cursor: pointer; }
+  #map { height: calc(100vh - 96px); }
+  #status { padding: 4px 10px; font-size: 12px; background: #16213e;
+         color: #9fb3c8; }
+  .popup h3 { margin: 0 0 4px; font-size: 15px; }
+  .popup .meta { color: #555; font-size: 12px; margin-bottom: 6px; }
+  .popup .tag { display: inline-block; background: #eef; color: #336;
+         border-radius: 10px; padding: 1px 8px; font-size: 11px;
+         margin: 0 3px 3px 0; }
+  .popup .event { background: #fff7e6; border-radius: 8px; padding: 6px 8px;
+         font-size: 12px; margin: 6px 0; }
+  .popup a { color: #e94560; font-weight: 600; font-size: 13px; }
+  .aberto { color: #0a7d33; font-weight: 700; }
+  .fechado { color: #a33; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <input id="q" type="text" placeholder="samba, espetinho, rock...">
+  <select id="when">
+    <option value="">qualquer dia</option>
+    <option value="today">hoje</option>
+    <option value="weekend">fim de semana</option>
+  </select>
+  <select id="radius">
+    <option value="1000">1 km</option>
+    <option value="2000" selected>2 km</option>
+    <option value="5000">5 km</option>
+    <option value="10000">10 km</option>
+  </select>
+  <label><input id="musica" type="checkbox"> música ao vivo</label>
+  <label><input id="open" type="checkbox"> aberto agora</label>
+  <label><input id="evento" type="checkbox"> com evento</label>
+  <button id="go">Buscar</button>
+</div>
+<div id="status">localizando você… (toque no mapa para buscar em outro ponto)</div>
+<div id="map"></div>
+<script>
+var center = [-23.5505, -46.6333];
+var API = 'https://quxzjsnjgpisepslcpnc.supabase.co/functions/v1/search';
+var map = L.map('map').setView(center, 14);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap | Maps API'
+}).addTo(map);
+var me = L.circleMarker(center, { radius: 8, color: '#fff', weight: 2,
+  fillColor: '#2b6cb0', fillOpacity: 1 }).addTo(map).bindTooltip('você');
+var pins = L.layerGroup().addTo(map);
+var statusEl = document.getElementById('status');
+
+function fmtEvent(ev) {
+  if (!ev) return '';
+  var d = new Date(ev.starts_at);
+  var quando = d.toLocaleString('pt-BR', { weekday: 'short', day: '2-digit',
+    month: '2-digit', hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/Sao_Paulo' });
+  var html = '<div class="event">🎵 <b>' + ev.title + '</b><br>' + quando;
+  if (ev.price_min != null) html += ' · a partir de R$ ' + ev.price_min;
+  if (ev.ticket_url) html += ' · <a href="' + ev.ticket_url +
+    '" target="_blank">ingresso</a>';
+  return html + '</div>';
+}
+
+function popup(r) {
+  var abertoTxt = r.open_now === true ? '<span class="aberto">aberto</span>'
+    : r.open_now === false ? '<span class="fechado">fechado</span>'
+    : 'horário desconhecido';
+  var tags = Object.keys(r.tags || {}).map(function (k) {
+    var v = r.tags[k];
+    return '<span class="tag">' + (v === true ? k :
+      k + ': ' + (Array.isArray(v) ? v.join(', ') : v)) + '</span>';
+  }).join('');
+  return '<div class="popup"><h3>' + r.name + '</h3>' +
+    '<div class="meta">' + r.place_type + ' · ' + r.distance_m + 'm · ' +
+    abertoTxt + '</div>' + tags + fmtEvent(r.next_event) +
+    '<a href="' + r.maps_url + '" target="_blank">Abrir no Google Maps →</a>' +
+    '</div>';
+}
+
+function buscar() {
+  statusEl.textContent = 'buscando…';
+  var p = new URLSearchParams({
+    lat: center[0], lng: center[1],
+    radius_m: document.getElementById('radius').value, limit: 50,
+  });
+  var q = document.getElementById('q').value.trim();
+  if (q) p.set('q', q);
+  var when = document.getElementById('when').value;
+  if (when) p.set('when', when);
+  if (document.getElementById('open').checked) p.set('open_now', 'true');
+  if (document.getElementById('evento').checked) p.set('has_event', 'true');
+  if (document.getElementById('musica').checked) p.set('tags', 'musica_ao_vivo');
+  fetch(API + '?' + p).then(function (r) { return r.json(); })
+    .then(function (d) {
+      pins.clearLayers();
+      (d.results || []).forEach(function (r) {
+        var cor = r.open_now === true ? '#0a7d33'
+          : r.open_now === false ? '#888' : '#2b6cb0';
+        L.circleMarker([r.location.lat, r.location.lng], {
+          radius: 9, color: '#fff', weight: 2, fillColor: cor, fillOpacity: .95,
+        }).bindPopup(popup(r), { maxWidth: 280 }).addTo(pins);
+      });
+      statusEl.textContent = d.count + ' lugar(es) — verde: aberto agora · ' +
+        'cinza: fechado · azul: horário desconhecido';
+      if (d.count > 0) {
+        map.stop();            // animação em andamento faz fitBounds errar
+        map.invalidateSize();
+        var b = pins.getLayers().map(function (m) { return m.getLatLng(); });
+        b.push(L.latLng(center[0], center[1]));
+        map.fitBounds(L.latLngBounds(b).pad(0.2), { animate: false, maxZoom: 16 });
+        if (map.getZoom() < 10) map.setView(center, 14, { animate: false });
+      }
+    })
+    .catch(function (e) { statusEl.textContent = 'erro: ' + e.message; });
+}
+
+document.getElementById('go').onclick = buscar;
+document.getElementById('q').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') buscar();
+});
+map.on('click', function (e) {
+  center = [e.latlng.lat, e.latlng.lng];
+  me.setLatLng(e.latlng);
+  buscar();
+});
+// busca já no centro default; se a geolocalização chegar (o prompt pode
+// ficar pendente pra sempre), re-centraliza e busca de novo
+buscar();
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(function (pos) {
+    center = [pos.coords.latitude, pos.coords.longitude];
+    me.setLatLng(center);
+    map.setView(center, 15);
+    buscar();
+  }, function () {
+    statusEl.textContent = 'sem localização — toque no mapa para mudar o ponto';
+  }, { timeout: 5000 });
+}
+</script>
+</body>
+</html>

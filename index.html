@@ -52,12 +52,16 @@
   <label><input id="open" type="checkbox"> aberto agora</label>
   <label><input id="evento" type="checkbox"> com evento</label>
   <button id="go">Buscar</button>
+  <a href="stats.html" style="color:#9fb3c8;text-decoration:none;font-size:16px" title="estatísticas">📊</a>
 </div>
 <div id="status">localizando você… (toque no mapa para buscar em outro ponto)</div>
 <div id="map"></div>
 <script>
 var center = [-23.5505, -46.6333];
 var API = 'https://quxzjsnjgpisepslcpnc.supabase.co/functions/v1/search';
+var STATS = 'https://quxzjsnjgpisepslcpnc.supabase.co/functions/v1/stats';
+fetch(STATS, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ beacon: 'map_open' }) });
 var map = L.map('map').setView(center, 14);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap | Maps API'

@@ -93,11 +93,21 @@ function popup(r) {
     return '<span class="tag">' + (v === true ? k :
       k + ': ' + (Array.isArray(v) ? v.join(', ') : v)) + '</span>';
   }).join('');
+  var links = [];
+  if (r.next_event && r.next_event.source_url) {
+    links.push('<a href="' + r.next_event.source_url +
+      '" target="_blank">origem do evento</a>');
+  }
+  if (r.instagram) {
+    links.push('<a href="https://instagram.com/' + r.instagram +
+      '" target="_blank">Instagram</a>');
+  }
+  links.push('<a href="' + r.maps_url + '" target="_blank">Google Maps →</a>');
   return '<div class="popup"><h3>' + r.name + '</h3>' +
     '<div class="meta">' + r.place_type + ' · ' + r.distance_m + 'm · ' +
     abertoTxt + '</div>' + tags + fmtEvent(r.next_event) +
-    '<a href="' + r.maps_url + '" target="_blank">Abrir no Google Maps →</a>' +
-    '</div>';
+    '<div style="display:flex;gap:12px;flex-wrap:wrap">' + links.join('') +
+    '</div></div>';
 }
 
 function buscar() {

@@ -80,6 +80,7 @@
   </select>
   <label><input id="musica" type="checkbox"> música ao vivo</label>
   <label><input id="evento" type="checkbox"> com evento</label>
+  <button id="loc" title="usar minha localização" style="background:#2b6cb0">📍</button>
   <button id="go">Buscar</button>
   <a href="stats.html" style="color:#9fb3c8;text-decoration:none;font-size:16px" title="estatísticas">📊</a>
 </div>
@@ -132,17 +133,27 @@ function initMap() {
     buscar();
   });
   buscar();
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(function (pos) {
-      center = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      meMarker.position = center;
-      map.setCenter(center);
-      map.setZoom(15);
-      buscar();
-    }, function () {
-      statusEl.textContent = 'sem localização — toque no mapa para mudar o ponto';
-    }, { timeout: 5000 });
+  localizar(false);
+}
+
+// centraliza no usuário; no Mac sem GPS o CoreLocation às vezes falha
+// (kCLErrorLocationUnknown) — falha vira aviso, e o botão 📍 re-tenta
+function localizar(manual) {
+  if (!navigator.geolocation) {
+    if (manual) statusEl.textContent = 'navegador sem geolocalização';
+    return;
   }
+  if (manual) statusEl.textContent = 'localizando você…';
+  navigator.geolocation.getCurrentPosition(function (pos) {
+    center = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    meMarker.position = center;
+    map.setCenter(center);
+    map.setZoom(15);
+    buscar();
+  }, function () {
+    statusEl.textContent = 'seu aparelho não conseguiu se localizar — ' +
+      'toque no mapa, use 🏙️ ou tente 📍 de novo';
+  }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 });
 }
 
 function temEventoHoje(r) {
@@ -241,6 +252,7 @@ function buscar() {
           position: { lat: r.location.lat, lng: r.location.lng },
           map: map,
           content: pinEl(r),
+          gmpClickable: true,
         });
         m.addEventListener('gmp-click', function () {
           info.setContent(popup(r));
@@ -284,6 +296,7 @@ document.getElementById('cidade').onchange = function () {
   this.value = '';
   buscar();
 };
+document.getElementById('loc').onclick = function () { localizar(true); };
 document.getElementById('go').onclick = buscar;
 document.getElementById('q').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') buscar();

@@ -9,7 +9,7 @@
   body { margin: 0; font-family: -apple-system, system-ui, sans-serif; }
   #bar { padding: 8px; background: #1a1a2e; color: #fff; display: flex;
          flex-wrap: wrap; gap: 6px; align-items: center; }
-  #bar input[type=text] { flex: 1; min-width: 130px; padding: 7px 10px;
+  #bar input[type=text] { flex: 1; min-width: 120px; padding: 7px 10px;
          border-radius: 8px; border: none; font-size: 14px; }
   #bar select, #bar button { padding: 7px 8px; border-radius: 8px;
          border: none; font-size: 13px; }
@@ -17,7 +17,14 @@
          white-space: nowrap; }
   #bar button { background: #e94560; color: #fff; font-weight: 600;
          cursor: pointer; }
-  #map { height: calc(100vh - 96px); }
+  #chips { display: flex; gap: 5px; padding: 7px 8px 0; background: #1a1a2e;
+         flex-wrap: wrap; }
+  .chip { border: 1px solid #3a3a5e; background: #232346; color: #cfd8e3;
+         border-radius: 999px; padding: 4px 12px; font-size: 12.5px;
+         cursor: pointer; user-select: none; }
+  .chip.on { background: #e94560; border-color: #e94560; color: #fff;
+         font-weight: 700; }
+  #map { height: calc(100vh - 132px); }
   #status { padding: 4px 10px; font-size: 12px; background: #16213e;
          color: #9fb3c8; }
   .popup h3 { margin: 0 0 4px; font-size: 15px; }
@@ -30,15 +37,40 @@
   .popup a { color: #e94560; font-weight: 600; font-size: 13px; }
   .aberto { color: #0a7d33; font-weight: 700; }
   .fechado { color: #a33; font-weight: 700; }
+  /* pins tininos (AdvancedMarker content) */
+  .pin { position: relative; width: 34px; height: 34px; border-radius: 50%;
+         background: #fff; display: flex; align-items: center;
+         justify-content: center; font-size: 17px; cursor: pointer;
+         border: 3px solid #2b6cb0;
+         box-shadow: 0 2px 6px rgba(0,0,0,.35);
+         transition: transform .12s; }
+  .pin:hover { transform: scale(1.18); z-index: 5; }
+  .pin.aberto-sim { border-color: #0a9d43; }
+  .pin.aberto-nao { border-color: #9aa5b1; filter: saturate(.55); }
+  .pin .badge { position: absolute; top: -7px; right: -7px; font-size: 12px;
+         background: #e94560; border-radius: 50%; width: 17px; height: 17px;
+         display: flex; align-items: center; justify-content: center;
+         color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .pin.hoje::after { content: ''; position: absolute; inset: -9px;
+         border-radius: 50%; border: 3px solid #e94560; opacity: .8;
+         animation: pulse 1.6s ease-out infinite; pointer-events: none; }
+  @keyframes pulse {
+    0%   { transform: scale(.75); opacity: .8; }
+    100% { transform: scale(1.25); opacity: 0; }
+  }
+  .me { width: 18px; height: 18px; border-radius: 50%; background: #2b6cb0;
+        border: 3px solid #fff; box-shadow: 0 0 6px rgba(0,0,0,.5); }
 </style>
 </head>
 <body>
 <div id="bar">
   <input id="q" type="text" placeholder="samba, espetinho, rock...">
-  <select id="when">
-    <option value="">qualquer dia</option>
-    <option value="today">hoje</option>
-    <option value="weekend">fim de semana</option>
+  <select id="cidade" title="ir para cidade">
+    <option value="">🏙️ ir para…</option>
+    <option value="-23.5505,-46.6333">São Paulo</option>
+    <option value="-19.9227,-43.9451">Belo Horizonte</option>
+    <option value="-10.1846,-48.3336">Palmas</option>
+    <option value="-16.6869,-49.2648">Goiânia</option>
   </select>
   <select id="radius">
     <option value="1000">1 km</option>
@@ -47,10 +79,16 @@
     <option value="10000">10 km</option>
   </select>
   <label><input id="musica" type="checkbox"> música ao vivo</label>
-  <label><input id="open" type="checkbox"> aberto agora</label>
   <label><input id="evento" type="checkbox"> com evento</label>
   <button id="go">Buscar</button>
   <a href="stats.html" style="color:#9fb3c8;text-decoration:none;font-size:16px" title="estatísticas">📊</a>
+</div>
+<div id="chips">
+  <span class="chip on" data-modo="">qualquer dia</span>
+  <span class="chip" data-modo="agora">🔥 agora</span>
+  <span class="chip" data-modo="today">hoje</span>
+  <span class="chip" data-modo="amanha">amanhã</span>
+  <span class="chip" data-modo="weekend">fim de semana</span>
 </div>
 <div id="status">localizando você… (toque no mapa para buscar em outro ponto)</div>
 <div id="map"></div>
@@ -63,30 +101,41 @@ fetch(STATS, { method: 'POST', headers: { 'Content-Type': 'application/json' },
 
 var map, info, meMarker;
 var markers = [];
+var modo = '';   // '' | agora | today | amanha | weekend
 var statusEl = document.getElementById('status');
+
+var EMOJI = { bar: '🍺', restaurante: '🍽️', casa_de_show: '🎤',
+  teatro: '🎭', praca: '🌳', event_venue: '🎪', other: '📍' };
+
+// SP é UTC-3 fixo — mesma conta do backend
+function spDate(daysAhead) {
+  var d = new Date(Date.now() - 3 * 3600000 + (daysAhead || 0) * 86400000);
+  return d.toISOString().slice(0, 10);
+}
 
 function initMap() {
   map = new google.maps.Map(document.getElementById('map'), {
     center: center, zoom: 14, clickableIcons: false,
+    mapId: 'DEMO_MAP_ID',
     streetViewControl: false, mapTypeControl: false, fullscreenControl: false,
   });
   info = new google.maps.InfoWindow();
-  meMarker = new google.maps.Marker({
-    position: center, map: map, zIndex: 999, title: 'você',
-    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8,
-      fillColor: '#2b6cb0', fillOpacity: 1,
-      strokeColor: '#fff', strokeWeight: 2 },
+  var meEl = document.createElement('div');
+  meEl.className = 'me';
+  meEl.title = 'ponto de busca';
+  meMarker = new google.maps.marker.AdvancedMarkerElement({
+    position: center, map: map, zIndex: 999, content: meEl,
   });
   map.addListener('click', function (e) {
     center = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-    meMarker.setPosition(center);
+    meMarker.position = center;
     buscar();
   });
   buscar();
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(function (pos) {
       center = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      meMarker.setPosition(center);
+      meMarker.position = center;
       map.setCenter(center);
       map.setZoom(15);
       buscar();
@@ -94,6 +143,30 @@ function initMap() {
       statusEl.textContent = 'sem localização — toque no mapa para mudar o ponto';
     }, { timeout: 5000 });
   }
+}
+
+function temEventoHoje(r) {
+  if (!r.next_event) return false;
+  var hoje = spDate(0);
+  var d = new Date(r.next_event.starts_at);
+  var diaEv = new Date(d.getTime() - 3 * 3600000).toISOString().slice(0, 10);
+  return diaEv === hoje;
+}
+
+function pinEl(r) {
+  var el = document.createElement('div');
+  el.className = 'pin ' + (r.open_now === true ? 'aberto-sim'
+    : r.open_now === false ? 'aberto-nao' : '');
+  if (temEventoHoje(r)) el.className += ' hoje';
+  el.textContent = EMOJI[r.place_type] || EMOJI.other;
+  el.title = r.name;
+  if (r.next_event) {
+    var b = document.createElement('span');
+    b.className = 'badge';
+    b.textContent = '🎵';
+    el.appendChild(b);
+  }
+  return el;
 }
 
 function fmtEvent(ev) {
@@ -153,24 +226,21 @@ function buscar() {
   });
   var q = document.getElementById('q').value.trim();
   if (q) p.set('q', q);
-  var when = document.getElementById('when').value;
-  if (when) p.set('when', when);
-  if (document.getElementById('open').checked) p.set('open_now', 'true');
+  if (modo === 'agora') p.set('open_now', 'true');
+  else if (modo === 'today') p.set('when', 'today');
+  else if (modo === 'amanha') p.set('when', spDate(1));
+  else if (modo === 'weekend') p.set('when', 'weekend');
   if (document.getElementById('evento').checked) p.set('has_event', 'true');
   if (document.getElementById('musica').checked) p.set('tags', 'musica_ao_vivo');
   fetch(API + '?' + p).then(function (r) { return r.json(); })
     .then(function (d) {
-      markers.forEach(function (m) { m.setMap(null); });
+      markers.forEach(function (m) { m.map = null; });
       markers = [];
       (d.results || []).forEach(function (r) {
-        var cor = r.open_now === true ? '#0a7d33'
-          : r.open_now === false ? '#888' : '#2b6cb0';
-        var m = new google.maps.Marker({
+        var m = new google.maps.marker.AdvancedMarkerElement({
           position: { lat: r.location.lat, lng: r.location.lng },
           map: map,
-          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 9,
-            fillColor: cor, fillOpacity: 0.95,
-            strokeColor: '#fff', strokeWeight: 2 },
+          content: pinEl(r),
         });
         m.addListener('click', function () {
           info.setContent(popup(r));
@@ -178,12 +248,13 @@ function buscar() {
         });
         markers.push(m);
       });
-      statusEl.textContent = d.count + ' lugar(es) — verde: aberto agora · ' +
-        'cinza: fechado · azul: horário desconhecido';
+      statusEl.textContent = d.count +
+        ' lugar(es) — anel verde: aberto · cinza: fechado · azul: não sei · ' +
+        '🎵 tem evento · pulsando: evento HOJE';
       if (d.count > 0) {
         var bounds = new google.maps.LatLngBounds();
-        markers.forEach(function (m) { bounds.extend(m.getPosition()); });
-        bounds.extend(meMarker.getPosition());
+        markers.forEach(function (m) { bounds.extend(m.position); });
+        bounds.extend(meMarker.position);
         map.fitBounds(bounds, 60);
         google.maps.event.addListenerOnce(map, 'idle', function () {
           if (map.getZoom() > 16) map.setZoom(16);
@@ -193,13 +264,33 @@ function buscar() {
     .catch(function (e) { statusEl.textContent = 'erro: ' + e.message; });
 }
 
+document.querySelectorAll('.chip').forEach(function (c) {
+  c.onclick = function () {
+    document.querySelectorAll('.chip').forEach(function (x) {
+      x.classList.remove('on');
+    });
+    c.classList.add('on');
+    modo = c.dataset.modo;
+    buscar();
+  };
+});
+document.getElementById('cidade').onchange = function () {
+  if (!this.value) return;
+  var xy = this.value.split(',');
+  center = { lat: parseFloat(xy[0]), lng: parseFloat(xy[1]) };
+  meMarker.position = center;
+  map.setCenter(center);
+  map.setZoom(14);
+  this.value = '';
+  buscar();
+};
 document.getElementById('go').onclick = buscar;
 document.getElementById('q').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') buscar();
 });
 </script>
 <script async
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAize4UIpEPs2H9iDtvYXVMMOCRV0mXCYQ&callback=initMap&language=pt-BR&region=BR">
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAize4UIpEPs2H9iDtvYXVMMOCRV0mXCYQ&callback=initMap&language=pt-BR&region=BR&libraries=marker&v=weekly&loading=async">
 </script>
 </body>
 </html>

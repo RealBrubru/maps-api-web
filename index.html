@@ -242,7 +242,7 @@ function buscar() {
           map: map,
           content: pinEl(r),
         });
-        m.addListener('click', function () {
+        m.addEventListener('gmp-click', function () {
           info.setContent(popup(r));
           info.open({ map: map, anchor: m });
         });

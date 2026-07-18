@@ -57,9 +57,12 @@
     background: #e94560; border-radius: 50%; width: 17px; height: 17px;
     display: flex; align-items: center; justify-content: center;
     color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
-  .pin.hoje::after { content: ''; position: absolute; inset: -9px;
-    border-radius: 50%; border: 3px solid #e94560; opacity: .8;
-    animation: pulse 1.6s ease-out infinite; pointer-events: none; }
+  .pin.rolando::after { content: ''; position: absolute; inset: -9px;
+    border-radius: 50%; border: 3px solid #0a9d43; opacity: .85;
+    animation: pulse 1.4s ease-out infinite; pointer-events: none; }
+  .pin.embreve::after { content: ''; position: absolute; inset: -8px;
+    border-radius: 50%; border: 2px solid #f0a821; opacity: .55;
+    animation: pulse 2.6s ease-out infinite; pointer-events: none; }
   @keyframes pulse {
     0%   { transform: scale(.75); opacity: .8; }
     100% { transform: scale(1.25); opacity: 0; }
@@ -105,9 +108,9 @@
     <button id="go" class="pillbtn" title="buscar">🔍</button>
   </div>
   <div id="chips">
-    <span class="chip on" data-modo="">qualquer dia</span>
+    <span class="chip" data-modo="">qualquer dia</span>
     <span class="chip" data-modo="agora">🔥 agora</span>
-    <span class="chip" data-modo="today">hoje</span>
+    <span class="chip on" data-modo="today">hoje</span>
     <span class="chip" data-modo="amanha">amanhã</span>
     <span class="chip" data-modo="weekend">fds</span>
     <span class="chip toggle" id="musica">🎵 música</span>
@@ -141,7 +144,7 @@ fetch(STATS, { method: 'POST', headers: { 'Content-Type': 'application/json' },
 
 var map, meMarker;
 var markers = [];
-var modo = '';
+var modo = 'today';   // o produto abre respondendo "o que tem HOJE?"
 var lastBusca = { lat: null, lng: null, zoom: null };
 var statusEl = document.getElementById('status');
 var sheetEl = document.getElementById('sheet');
@@ -215,11 +218,25 @@ function localizar(manual) {
   }, { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 });
 }
 
-function temEventoHoje(r) {
-  if (!r.next_event) return false;
+// semáforo do pulso (pedido: Bruno): verde forte = ROLANDO agora
+// (até ends_at; sem fim conhecido, régua de 4h após o início);
+// âmbar suave = ainda hoje, mas mais tarde
+function rolandoAgora(r) {
+  var ev = r.next_event;
+  if (!ev) return false;
+  var ini = new Date(ev.starts_at).getTime();
+  var fim = ev.ends_at ? new Date(ev.ends_at).getTime()
+    : ini + 4 * 3600000;
+  var agora = Date.now();
+  return agora >= ini && agora < fim;
+}
+function aindaHoje(r) {
+  var ev = r.next_event;
+  if (!ev) return false;
+  var ini = new Date(ev.starts_at).getTime();
+  if (ini <= Date.now()) return false;
   var hoje = spDate(0);
-  var d = new Date(r.next_event.starts_at);
-  var diaEv = new Date(d.getTime() - 3 * 3600000).toISOString().slice(0, 10);
+  var diaEv = new Date(ini - 3 * 3600000).toISOString().slice(0, 10);
   return diaEv === hoje;
 }
 
@@ -227,7 +244,8 @@ function pinEl(r) {
   var el = document.createElement('div');
   el.className = 'pin ' + (r.open_now === true ? 'aberto-sim'
     : r.open_now === false ? 'aberto-nao' : '');
-  if (temEventoHoje(r)) el.className += ' hoje';
+  if (rolandoAgora(r)) el.className += ' rolando';
+  else if (aindaHoje(r)) el.className += ' embreve';
   el.textContent = EMOJI[r.place_type] || EMOJI.other;
   el.title = r.name;
   if (r.next_event) {
@@ -331,8 +349,8 @@ function buscar() {
         m.addEventListener('gmp-click', function () { abrirFicha(r); });
         markers.push(m);
       });
-      statusEl.textContent = d.count + ' na tela · verde aberto · ' +
-        'pulsando = evento hoje';
+      statusEl.textContent = d.count + ' na tela · 🟢 pulsando = ' +
+        'rolando agora · 🟡 = mais tarde hoje';
     })
     .catch(function (e) { statusEl.textContent = 'erro: ' + e.message; });
 }

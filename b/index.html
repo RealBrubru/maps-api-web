@@ -318,9 +318,8 @@ function localizar(manual) {
   if (manual) statusEl.textContent = 'localizando você…';
   navigator.geolocation.getCurrentPosition(function (pos) {
     var aqui = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    meMarker.position = aqui;
-    map.setCenter(aqui);
-    map.setZoom(15);
+    meMarker.coordinate = new mapkit.Coordinate(aqui.lat, aqui.lng);
+    irPara(aqui.lat, aqui.lng, 0.012);
   }, function () {
     statusEl.textContent = 'seu aparelho não conseguiu se localizar — ' +
       'arraste o mapa, use 🏙️ ou tente 📍 de novo';

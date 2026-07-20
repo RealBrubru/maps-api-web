@@ -234,6 +234,7 @@ function initMap() {
   meEl.title = 'você';
   meMarker = new maplibregl.Marker({ element: meEl, anchor: 'bottom' })
     .setLngLat([center.lng, center.lat]).addTo(map);
+  map.once('load', function () { map.resize(); });
   map.on('click', fecharFicha);
   map.on('moveend', function () {
     var c = map.getCenter();
@@ -306,7 +307,7 @@ function localizar(manual) {
   if (manual) statusEl.textContent = 'localizando você…';
   navigator.geolocation.getCurrentPosition(function (pos) {
     var aqui = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    meMarker.position = aqui;
+    meMarker.setLngLat([aqui.lng, aqui.lat]);
     map.setCenter(aqui);
     map.setZoom(15);
   }, function () {
@@ -551,7 +552,7 @@ function buscar() {
   if (!map) return;
   statusEl.textContent = 'buscando…';
   var c = map.getCenter();
-  center = { lat: c.lat(), lng: c.lng() };
+  center = { lat: c.lat, lng: c.lng };
   lastBusca = { lat: center.lat, lng: center.lng, zoom: map.getZoom() };
   var p = new URLSearchParams({
     lat: center.lat, lng: center.lng,

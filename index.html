@@ -347,6 +347,12 @@ function abrirFicha(r) {
       k + ': ' + (Array.isArray(v) ? v.join(', ') : v)) + '</span>';
   }).join('');
   var links = [];
+  if (r.next_event && r.next_event.id) {
+    links.push('<a href="#" onclick="compartilhar(\'' + r.next_event.id +
+      '\', \'' + (r.next_event.title || '').replace(/'/g, '') +
+      '\', \'' + r.name.replace(/'/g, '') +
+      '\'); return false">📤 compartilhar</a>');
+  }
   if (r.next_event && r.next_event.source_url) {
     links.push('<a href="' + r.next_event.source_url +
       '" target="_blank">mais info</a>');
@@ -375,6 +381,19 @@ function abrirFicha(r) {
 
 function fecharFicha() {
   sheetEl.classList.remove('up');
+}
+
+// nº 1 do backlog da galera: link rastreável do evento (ref=share no
+// mapa; a página /e/ re-compartilha com ref=wa)
+function compartilhar(id, titulo, lugar) {
+  var url = 'https://musicadehoje.com.br/e/?id=' + id + '&ref=share';
+  var texto = titulo + ' — ' + lugar + '\n' + url;
+  if (navigator.share) {
+    navigator.share({ title: titulo, text: texto, url: url });
+  } else {
+    navigator.clipboard.writeText(url);
+    statusEl.textContent = '✅ link do evento copiado!';
+  }
 }
 
 // ===== onda B: trilho de eventos sincronizado com o mapa =====

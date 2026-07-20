@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>música de hoje — bora nesse rolê?</title>
+<meta property="og:site_name" content="música de hoje">
+<meta property="og:title" content="bora nesse rolê? 🎵">
+<meta property="og:description"
+  content="Alguém te chamou pra um evento — vem ver o quê, onde e que horas.">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: #1a1a2e;
+    font-family: -apple-system, system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 24px 14px calc(24px + env(safe-area-inset-bottom)); }
+  #card { background: #fff; border-radius: 18px; padding: 22px 20px;
+    max-width: 480px; width: 100%;
+    box-shadow: 0 8px 30px rgba(10,10,30,.45); }
+  h1 { font-size: 20px; margin: 0 0 6px; color: #1a1a2e; }
+  .genero { display: inline-block; background: #fbe3e8; color: #99253c;
+    border-radius: 999px; padding: 2px 10px; font-size: 11.5px;
+    font-weight: 700; margin: 0 4px 6px 0; }
+  .quando { font-size: 15px; color: #1a1a2e; font-weight: 600;
+    margin: 10px 0 2px; }
+  .lugar { font-size: 13.5px; color: #5f6b7a; line-height: 1.5; }
+  .aberto { color: #0a7d33; font-weight: 700; }
+  .fechado { color: #a33; font-weight: 700; }
+  .preco { font-size: 13px; color: #4a3b1e; background: #fff7e6;
+    border-radius: 8px; padding: 6px 10px; margin-top: 10px;
+    display: inline-block; }
+  .botoes { display: flex; flex-direction: column; gap: 8px;
+    margin-top: 16px; }
+  .botoes a { display: block; text-align: center; text-decoration: none;
+    border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 700; }
+  .primario { background: #e94560; color: #fff; }
+  .secundario { background: #eef2f7; color: #1a1a2e; }
+  .linha { display: flex; gap: 8px; }
+  .linha a { flex: 1; }
+  #rodape { color: #9fb3c8; font-size: 12px; margin-top: 18px;
+    text-align: center; }
+  #rodape a { color: #e94560; text-decoration: none; font-weight: 700; }
+  #estado { color: #9fb3c8; font-size: 14px; margin-top: 40vh; }
+</style>
+</head>
+<body>
+<p id="estado">carregando o rolê…</p>
+<div id="card" style="display:none"></div>
+<p id="rodape" style="display:none">
+  <a href="/">música de hoje</a> — o que tá rolando perto de você
+</p>
+<script>
+var API = 'https://quxzjsnjgpisepslcpnc.supabase.co/functions/v1/search';
+var params = new URLSearchParams(location.search);
+var id = params.get('id');
+var ref = params.get('ref') || 'direto';
+var estadoEl = document.getElementById('estado');
+
+function esc(s) {
+  var d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+if (!id) {
+  estadoEl.textContent = 'link incompleto — peça pra pessoa mandar de novo!';
+} else {
+  fetch(API + '?event=' + encodeURIComponent(id) +
+        '&ref=' + encodeURIComponent(ref))
+    .then(function (r) {
+      if (!r.ok) throw new Error('não achei esse evento');
+      return r.json();
+    })
+    .then(function (ev) {
+      var d = new Date(ev.starts_at);
+      var quando = ev.start_time_known === false
+        ? d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit',
+            month: 'long', timeZone: 'America/Sao_Paulo' }) +
+          ' · horário no local'
+        : d.toLocaleString('pt-BR', { weekday: 'long', day: '2-digit',
+            month: 'long', hour: '2-digit', minute: '2-digit',
+            timeZone: 'America/Sao_Paulo' });
+      var p = ev.place || {};
+      var abertoTxt = p.open_now === true
+        ? ' · <span class="aberto">aberto agora</span>'
+        : p.open_now === false ? ' · <span class="fechado">fechado agora</span>'
+        : '';
+      var generos = (ev.genres || []).map(function (g) {
+        return '<span class="genero">' + esc(g) + '</span>';
+      }).join('');
+      var botoes = [];
+      if (ev.ticket_url) {
+        botoes.push('<a class="primario" href="' + esc(ev.ticket_url) +
+          '">🎟️ garantir ingresso</a>');
+      }
+      botoes.push('<a class="' + (ev.ticket_url ? 'secundario' : 'primario') +
+        '" href="/">🗺️ ver no mapa vivo</a>');
+      var linha = [];
+      if (p.maps_url) {
+        linha.push('<a class="secundario" href="' + esc(p.maps_url) +
+          '">Google Maps</a>');
+      }
+      if (p.instagram) {
+        linha.push('<a class="secundario" href="https://instagram.com/' +
+          esc(p.instagram) + '">Instagram</a>');
+      }
+      if (p.location) {
+        linha.push('<a class="secundario" href="https://m.uber.com/ul/?' +
+          'action=setPickup&pickup=my_location&dropoff[latitude]=' +
+          p.location.lat + '&dropoff[longitude]=' + p.location.lng +
+          '&dropoff[nickname]=' + encodeURIComponent(p.name || '') +
+          '">🚗 Uber</a>');
+      }
+      document.getElementById('card').innerHTML =
+        '<h1>' + esc(ev.title) + '</h1>' + generos +
+        '<div class="quando">📅 ' + quando + '</div>' +
+        '<div class="lugar">📍 <b>' + esc(p.name || 'lugar a confirmar') +
+        '</b>' + abertoTxt + '<br>' + esc(p.address || '') +
+        (p.city ? ' — ' + esc(p.city) : '') + '</div>' +
+        (ev.price_min != null
+          ? '<div class="preco">a partir de R$ ' + esc(ev.price_min) + '</div>'
+          : '') +
+        '<div class="botoes">' + botoes.join('') +
+        (linha.length ? '<div class="linha">' + linha.join('') + '</div>' : '') +
+        '<a class="secundario" href="#" id="btn-share">📤 chamar mais gente</a>' +
+        '</div>';
+      document.title = esc(ev.title) + ' — música de hoje';
+      estadoEl.style.display = 'none';
+      document.getElementById('card').style.display = 'block';
+      document.getElementById('rodape').style.display = 'block';
+      document.getElementById('btn-share').onclick = function (e) {
+        e.preventDefault();
+        var url = 'https://musicadehoje.com.br/e/?id=' + id + '&ref=wa';
+        var texto = ev.title + ' — ' + (p.name || '') + '\n' + url;
+        if (navigator.share) {
+          navigator.share({ title: ev.title, text: texto, url: url });
+        } else {
+          navigator.clipboard.writeText(url);
+          this.textContent = '✅ link copiado!';
+        }
+      };
+    })
+    .catch(function () {
+      estadoEl.innerHTML = 'não achei esse evento (pode ter passado ou ' +
+        'saído do ar) — <a href="/" style="color:#e94560">veja o que tá ' +
+        'rolando agora</a>';
+    });
+}
+</script>
+</body>
+</html>

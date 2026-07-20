@@ -51,6 +51,8 @@ https://quxzjsnjgpisepslcpnc.supabase.co/functions/v1/search?lat=&lt;lat&gt;&amp
     <button onclick="navigator.clipboard.writeText(document.getElementById('prompt').textContent)" style="background:#e94560;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:600;cursor:pointer">copiar prompt</button>
     <span class="muted" style="font-size:12px;margin-left:8px">troque "samba"/bairro à vontade · a URL sem parâmetros devolve o manual da API</span>
   </div>
+  <h2>O Auditor (curador do curador)</h2>
+  <p id="auditor" style="font-size:14px;color:#555"></p>
   <h2>Fontes de dados (saúde do pipeline)</h2>
   <table id="fontes"><thead><tr>
     <th>fonte</th><th>status</th><th>último run</th>
@@ -99,6 +101,16 @@ fetch(STATS, { cache: 'no-store' }).then(function (r) { return r.json(); }).then
     card(u.mapa_hoje + ' <span class="muted">/ ' + u.mapa_7d + '</span>',
       'mapa aberto hoje / 7d') +
     card(b.celulas_pendentes, 'células na fila do curador');
+
+  var au = d.auditor || {};
+  var tipos = (au.pendentes_por_tipo || []).map(function (t) {
+    return t.tipo + ' (' + t.qtd + ')';
+  }).join(' · ');
+  document.getElementById('auditor').textContent =
+    (au.pendentes || 0) + ' achado(s) pendente(s)' +
+    (tipos ? ' — ' + tipos : ' — fila limpa ✨') +
+    ' · ' + (au.auto_fixados_7d || 0) + ' auto-corrigidos e ' +
+    (au.triados_7d || 0) + ' triados nos últimos 7 dias';
 
   var max = Math.max.apply(null, d.fontes.map(function (f) {
     return f.eventos_ativos; }).concat([1]));

@@ -81,6 +81,18 @@
     0%   { transform: scale(.75); opacity: .8; }
     100% { transform: scale(1.25); opacity: 0; }
   }
+  /* lugar SELECIONADO (ficha aberta): anel vermelho-marca + pop —
+     acha o pin na multidão sem roubar o semáforo verde/âmbar */
+  .pin.destaque { transform: scale(1.3); animation: acha .5s ease; }
+  .pin.destaque:hover { transform: scale(1.3); }
+  .pin.destaque::before { content: ''; position: absolute; inset: -8px;
+    border-radius: 50%; border: 3px solid #e94560;
+    box-shadow: 0 0 12px rgba(233,69,96,.6); pointer-events: none; }
+  @keyframes acha {
+    0%   { transform: scale(.55); }
+    60%  { transform: scale(1.5); }
+    100% { transform: scale(1.3); }
+  }
   .me { width: 18px; height: 18px; border-radius: 50%; background: #2b6cb0;
     border: 3px solid #fff; box-shadow: 0 0 6px rgba(0,0,0,.5); }
 
@@ -231,6 +243,8 @@ var modo = 'today';   // o produto abre respondendo "o que tem HOJE?"
 var oque = 'shows';   // seletor único de conteúdo: o padrão É o show
 var LIMITE = 200;     // teto da busca (o servidor também capa em 200)
 var pendingFichaId = null;  // lugar achado pela busca-longe: abre ao chegar
+var markersById = {};       // id → {marker, elemento} da rodada atual
+var destaqueId = null;      // pin da ficha aberta (anel vermelho-marca)
 var lastBusca = { lat: null, lng: null, zoom: null };
 var statusEl = document.getElementById('status');
 var sheetEl = document.getElementById('sheet');
@@ -459,11 +473,22 @@ function abrirFicha(r) {
   favBtn.className = 'fav' + (ehFav(r.id) ? ' salvo' : '');
   favBtn.textContent = ehFav(r.id) ? '⭐ salvo' : '☆ salvar';
   favBtn.onclick = function () { toggleFav(r, favBtn); };
+  destacarPin(r.id);
   sheetEl.classList.add('up');
 }
 
+function destacarPin(id) {
+  var e = markersById[destaqueId];
+  if (e) { e.el.classList.remove('destaque'); e.m.zIndex = null; }
+  destaqueId = id;
+  e = markersById[id];
+  if (e) { e.el.classList.add('destaque'); e.m.zIndex = 999; }
+}
 function fecharFicha() {
   sheetEl.classList.remove('up');
+  var e = markersById[destaqueId];
+  if (e) { e.el.classList.remove('destaque'); e.m.zIndex = null; }
+  destaqueId = null;
 }
 
 // nº 1 do backlog da galera: link rastreável do evento (ref=share no
@@ -697,16 +722,21 @@ function buscar() {
     .then(function (d) {
       markers.forEach(function (m) { m.map = null; });
       markers = [];
+      markersById = {};
       (d.results || []).forEach(function (r) {
+        var el = pinEl(r);
         var m = new google.maps.marker.AdvancedMarkerElement({
           position: { lat: r.location.lat, lng: r.location.lng },
           map: map,
-          content: pinEl(r),
+          content: el,
           gmpClickable: true,
         });
         m.addEventListener('gmp-click', function () { abrirFicha(r); });
         markers.push(m);
+        markersById[r.id] = { m: m, el: el };
       });
+      // ficha aberta sobrevive ao rebuild → re-destaca o pin novo
+      if (destaqueId && markersById[destaqueId]) destacarPin(destaqueId);
       montarTrilho(d.results || []);
       if (listaEl.classList.contains('up')) montarLista();
       if (pendingFichaId) {

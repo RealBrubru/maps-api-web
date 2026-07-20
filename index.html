@@ -218,6 +218,7 @@ var markers = [];
 var modo = 'today';   // o produto abre respondendo "o que tem HOJE?"
 var oque = 'shows';   // seletor único de conteúdo: o padrão É o show
 var LIMITE = 200;     // teto da busca (o servidor também capa em 200)
+var pendingFichaId = null;  // lugar achado pela busca-longe: abre ao chegar
 var lastBusca = { lat: null, lng: null, zoom: null };
 var statusEl = document.getElementById('status');
 var sheetEl = document.getElementById('sheet');
@@ -696,6 +697,19 @@ function buscar() {
       });
       montarTrilho(d.results || []);
       if (listaEl.classList.contains('up')) montarLista();
+      if (pendingFichaId) {
+        var alvo = (d.results || []).find(function (r) {
+          return r.id === pendingFichaId;
+        });
+        pendingFichaId = null;
+        if (alvo) focarLugar(alvo, true);
+      } else if (q && d.count === 1) {
+        // busca com resultado único: já seleciona (pedido: Bruno)
+        focarLugar(d.results[0], true);
+      } else if (q && d.count === 0) {
+        procurarLonge(q);
+        return;
+      }
       var n = d.count >= LIMITE ? d.count + '+ (aproxima pra ver tudo)'
         : d.count;
       statusEl.textContent = oque === 'sossego'
@@ -737,10 +751,54 @@ document.getElementById('cidade').onchange = function () {
   this.value = '';
 };
 document.getElementById('loc').onclick = function () { localizar(true); };
-document.getElementById('go').onclick = buscar;
+// busca DIGITADA alarga os filtros (pedido: Bruno — "vc tá buscando
+// algo e quer VER algo"): todos + qualquer dia; depois refina na mão
+function alargarFiltros() {
+  modo = '';
+  document.querySelectorAll('.chip[data-modo]').forEach(function (x) {
+    x.classList.toggle('on', x.dataset.modo === '');
+  });
+  oque = 'todos';
+  document.querySelectorAll('.chip.oque').forEach(function (x) {
+    x.classList.remove('on', 'sem');
+    if (x.dataset.oque === 'todos') x.classList.add('on');
+  });
+}
+function buscarDigitada() {
+  if (document.getElementById('q').value.trim()) alargarFiltros();
+  buscar();
+}
+document.getElementById('go').onclick = buscarDigitada;
 document.getElementById('q').addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') { buscar(); this.blur(); }
+  if (e.key === 'Enter') { buscarDigitada(); this.blur(); }
 });
+
+// não achou no viewport → procura o LUGAR pelo nome no país inteiro;
+// similaridade forte = voa até lá (ficha abre ao chegar); fraca =
+// honestidade ("pode não estar mapeado ainda")
+function procurarLonge(texto) {
+  statusEl.textContent = 'procurando "' + texto + '" no mapa todo…';
+  var c = map.getCenter();
+  fetch(API + '?lookup=' + encodeURIComponent(texto) +
+        '&lat=' + c.lat() + '&lng=' + c.lng())
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var hit = (d.results || [])[0];
+      if (hit && hit.similarity >= 0.55) {
+        statusEl.textContent = '✈️ achei: ' + hit.name +
+          (hit.city ? ' — ' + hit.city : '') + '. Te levando…';
+        pendingFichaId = hit.id;
+        document.getElementById('q').value = '';
+        fecharFicha();
+        map.setCenter({ lat: hit.location.lat, lng: hit.location.lng });
+        map.setZoom(16);   // o idle re-busca (todos+qualquer dia) e abre a ficha
+      } else {
+        statusEl.textContent = 'não achei "' + texto + '" — pode ainda ' +
+          'não estar no mapa 🕳️ (anotei a lacuna pro robô)';
+      }
+    })
+    .catch(function () {});
+}
 </script>
 <script async
   src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAize4UIpEPs2H9iDtvYXVMMOCRV0mXCYQ&callback=initMap&language=pt-BR&region=BR&libraries=marker&v=weekly&loading=async">

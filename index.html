@@ -167,7 +167,7 @@
     <span class="chip on" data-modo="today">hoje</span>
     <span class="chip" data-modo="amanha">amanhã</span>
     <span class="chip" data-modo="weekend">fds</span>
-    <span class="chip oque on" data-oque="shows">🎵 shows</span>
+    <span class="chip oque on" data-oque="shows">🎵 música</span>
     <span class="chip oque" data-oque="eventos">✨ eventos</span>
     <span class="chip oque" data-oque="todos">🍺 todos</span>
     <span class="chip oque sossego" data-oque="sossego">🔇 sossego</span>
@@ -217,6 +217,7 @@ var map, meMarker;
 var markers = [];
 var modo = 'today';   // o produto abre respondendo "o que tem HOJE?"
 var oque = 'shows';   // seletor único de conteúdo: o padrão É o show
+var LIMITE = 200;     // teto da busca (o servidor também capa em 200)
 var lastBusca = { lat: null, lng: null, zoom: null };
 var statusEl = document.getElementById('status');
 var sheetEl = document.getElementById('sheet');
@@ -662,7 +663,7 @@ function buscar() {
   lastBusca = { lat: center.lat, lng: center.lng, zoom: map.getZoom() };
   var p = new URLSearchParams({
     lat: center.lat, lng: center.lng,
-    radius_m: viewportRadius(), limit: 50,
+    radius_m: viewportRadius(), limit: LIMITE,
   });
   var q = document.getElementById('q').value.trim();
   if (q) p.set('q', q);
@@ -695,9 +696,11 @@ function buscar() {
       });
       montarTrilho(d.results || []);
       if (listaEl.classList.contains('up')) montarLista();
+      var n = d.count >= LIMITE ? d.count + '+ (aproxima pra ver tudo)'
+        : d.count;
       statusEl.textContent = oque === 'sossego'
-        ? d.count + ' na tela · 🔇 só lugares sem música ao vivo'
-        : d.count + ' na tela · 🟢 pulsando = rolando agora · ' +
+        ? n + ' na tela · 🔇 só lugares sem música ao vivo'
+        : n + ' na tela · 🟢 pulsando = rolando agora · ' +
           '🟡 = mais tarde hoje';
     })
     .catch(function (e) { statusEl.textContent = 'erro: ' + e.message; });

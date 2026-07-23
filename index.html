@@ -208,6 +208,20 @@
     <span class="chip oque" data-oque="eventos">✨ eventos</span>
     <span class="chip oque" data-oque="todos">🍺 todos</span>
     <span class="chip oque sossego" data-oque="sossego">🔇 sossego</span>
+    <select class="chip" id="genero" title="filtrar por gênero">
+      <option value="">🎶 gêneros</option>
+      <option value="samba">samba</option>
+      <option value="pagode">pagode</option>
+      <option value="forró,forro">forró</option>
+      <option value="rock">rock</option>
+      <option value="mpb">mpb</option>
+      <option value="sertanejo">sertanejo</option>
+      <option value="jazz,blues">jazz & blues</option>
+      <option value="eletr,dj">eletrônica</option>
+      <option value="funk">funk</option>
+      <option value="karaok">karaokê</option>
+      <option value="comédia,comedia,stand">comédia</option>
+    </select>
     <select class="chip" id="cidade" title="ir para cidade">
       <option value="">🏙️ cidades</option>
       <option value="-23.5505,-46.6333">São Paulo</option>
@@ -255,6 +269,7 @@ var map, meMarker;
 var markers = [];
 var modo = 'today';   // o produto abre respondendo "o que tem HOJE?"
 var oque = 'shows';   // seletor único de conteúdo: o padrão É o show
+var genero = '';      // filtro de gênero (só faz sentido no modo shows)
 var LIMITE = 200;     // teto da busca (o servidor também capa em 200)
 var pendingFichaId = null;  // lugar achado pela busca-longe: abre ao chegar
 var VAPID_PUBLIC = 'BMdRf0uUd-1dHLxExaAFmtQkneHPbSnaxSffJfbr8vzw7F5LKV2gUVAGxDXzuoYvTb0rLdPEm_P1wQAC7On3mHo';
@@ -847,9 +862,10 @@ function buscar() {
   else if (modo === 'amanha') p.set('when', spDate(1));
   else if (modo === 'weekend') p.set('when', 'weekend');
   if (oque === 'shows') {
-    // evento DE MÚSICA na janela — mesma régua do pulso (GENEROS_MUSICA)
+    // evento DE MÚSICA na janela — mesma régua do pulso (GENEROS_MUSICA);
+    // com gênero escolhido, o filtro afunila só nele
     p.set('has_event', 'true');
-    p.set('event_genres', GENEROS_MUSICA.join(','));
+    p.set('event_genres', genero || GENEROS_MUSICA.join(','));
   } else if (oque === 'eventos') {
     p.set('has_event', 'true');
   } else if (oque === 'sossego') {
@@ -918,9 +934,25 @@ document.querySelectorAll('.chip.oque').forEach(function (c) {
     });
     c.classList.add(c.dataset.oque === 'sossego' ? 'sem' : 'on');
     oque = c.dataset.oque;
+    if (oque !== 'shows') {
+      genero = '';
+      document.getElementById('genero').value = '';
+    }
     buscar();
   };
 });
+// gênero escolhido implica modo shows (e pinta os chips de acordo)
+document.getElementById('genero').onchange = function () {
+  genero = this.value;
+  if (genero) {
+    oque = 'shows';
+    document.querySelectorAll('.chip.oque').forEach(function (x) {
+      x.classList.remove('on', 'sem');
+      if (x.dataset.oque === 'shows') x.classList.add('on');
+    });
+  }
+  buscar();
+};
 document.getElementById('cidade').onchange = function () {
   if (!this.value) return;
   var xy = this.value.split(',');
